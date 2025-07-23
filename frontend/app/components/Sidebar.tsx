@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import { motion } from 'framer-motion'
 import { 
   Home, 
   Clock, 
@@ -56,39 +57,85 @@ export function Sidebar({ currentView = 'timeline', onViewChange, session, userD
   return (
     <div className="w-64 bg-gradient-to-b from-purple-200 via-purple-300 to-purple-400 text-white min-h-screen shadow-xl">
       {/* Header */}
-      <div className="p-6">
+      <motion.div 
+        className="p-6"
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
         <div className="flex items-center space-x-3">
-          <Logo size="md" className="drop-shadow-sm" />
-          <span className="text-xl font-bold text-purple-900">LifeLog AI</span>
+          <motion.div
+            whileHover={{ scale: 1.1, rotate: 5 }}
+            transition={{ duration: 0.2 }}
+          >
+            <Logo size="md" className="drop-shadow-sm" />
+          </motion.div>
+          <motion.span 
+            className="text-xl font-bold text-purple-900"
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            LifeLog AI
+          </motion.span>
         </div>
-      </div>
+      </motion.div>
 
       {/* Navigation */}
-      <nav className="px-4 space-y-2">
-        {navigation.map((item) => {
+      <motion.nav 
+        className="px-4 space-y-2"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.2 }}
+      >
+        {navigation.map((item, index) => {
           const Icon = item.icon
           const isActive = currentView === item.view
           return (
-            <button
+            <motion.button
               key={item.name}
               onClick={() => handleNavClick(item.view)}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors text-left ${
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left ${
                 isActive 
                   ? 'bg-purple-600 text-white shadow-md' 
-                  : 'text-purple-800 hover:bg-purple-500 hover:text-white'
+                  : 'text-purple-800'
               }`}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, delay: index * 0.1 }}
+              whileHover={{ 
+                scale: 1.02,
+                backgroundColor: isActive ? '#7c3aed' : '#a855f7',
+                color: '#ffffff',
+                transition: { duration: 0.2 }
+              }}
+              whileTap={{ scale: 0.98 }}
             >
-              <Icon className="h-5 w-5" />
+              <motion.div
+                whileHover={{ rotate: 5 }}
+                transition={{ duration: 0.2 }}
+              >
+                <Icon className="h-5 w-5" />
+              </motion.div>
               <span className="font-medium">{item.name}</span>
-            </button>
+            </motion.button>
           )
         })}
-      </nav>
+      </motion.nav>
 
       {/* User Profile Section */}
       {session && (
-        <div className="mt-auto p-4">
-          <div className="bg-purple-600/30 rounded-lg p-3 border border-purple-500/20">
+        <motion.div 
+          className="mt-auto p-4"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.4 }}
+        >
+          <motion.div 
+            className="bg-purple-600/30 rounded-lg p-3 border border-purple-500/20"
+            whileHover={{ scale: 1.02, backgroundColor: 'rgba(147, 51, 234, 0.4)' }}
+            transition={{ duration: 0.2 }}
+          >
             <div className="flex items-center space-x-3 mb-3">
               <div className="w-8 h-8 bg-purple-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-sm">
                 {(userDisplayName || 'U')[0].toUpperCase()}
@@ -148,8 +195,8 @@ export function Sidebar({ currentView = 'timeline', onViewChange, session, userD
               <LogOut className="h-4 w-4" />
               <span>Sign Out</span>
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
     </div>
   )

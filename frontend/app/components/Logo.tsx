@@ -1,4 +1,5 @@
 import React from 'react'
+import { motion } from 'framer-motion'
 
 interface LogoProps {
   className?: string
@@ -13,12 +14,25 @@ export function Logo({ className = '', size = 'md' }: LogoProps) {
   }
 
   return (
-    <div className={`${sizeClasses[size]} ${className}`}>
-      <svg
+    <motion.div 
+      className={`${sizeClasses[size]} ${className}`}
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ scale: 1.05 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+    >
+      <motion.svg
         viewBox="0 0 40 40"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className="w-full h-full"
+        animate={{ rotate: [0, 5, -5, 0] }}
+        transition={{ 
+          duration: 4, 
+          repeat: Infinity, 
+          repeatType: "reverse",
+          ease: "easeInOut" 
+        }}
       >
         {/* Outer circle with gradient */}
         <circle
@@ -37,9 +51,15 @@ export function Logo({ className = '', size = 'md' }: LogoProps) {
         />
         
         {/* Central diamond */}
-        <path
+        <motion.path
           d="M16 20 L20 16 L24 20 L20 24 Z"
           fill="url(#centerGradient)"
+          animate={{ scale: [1, 1.1, 1] }}
+          transition={{ 
+            duration: 2, 
+            repeat: Infinity, 
+            ease: "easeInOut" 
+          }}
         />
         
         {/* Small accent dots */}
@@ -59,8 +79,8 @@ export function Logo({ className = '', size = 'md' }: LogoProps) {
             <stop offset="100%" stopColor="#9333ea" />
           </linearGradient>
         </defs>
-      </svg>
-    </div>
+      </motion.svg>
+    </motion.div>
   )
 }
 
