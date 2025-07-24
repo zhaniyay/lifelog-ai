@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     max_file_size: int = 100 * 1024 * 1024  # 100MB
     
     class Config:
-        env_file = ".env"
+        env_file = "../.env"
+        extra = "ignore"  # Ignore extra environment variables
 
 settings = Settings()
