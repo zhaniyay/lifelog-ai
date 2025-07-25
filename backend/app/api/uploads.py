@@ -21,26 +21,31 @@ async def upload_file(
 ):
     """Upload and process a file"""
     
-    # Validate file size
-    if file.size > settings.max_file_size:
+    # Read file content to check size
+    file_content = await file.read()
+    file_size = len(file_content)
+    if file_size > settings.max_file_size:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"File size exceeds maximum limit of {settings.max_file_size} bytes"
         )
+    # Reset file pointer for downstream consumers
+    file.file.seek(0)
     
     file_service = FileService()
     
-    # Determine file type
-    file_type = file_service.get_file_type(file.filename)
+    # Determine file type using content-based validation
+    file_type = file_service.get_file_type(file.filename, file_content=file_content)
     if file_type == 'unknown':
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Unsupported file type"
+            detail="Unsupported or unrecognized file type"
         )
     
     try:
         # Save file
         file_path, original_filename = await file_service.save_file(file, current_user.id)
+        file_saved = True
         
         # Create entry in database
         entry = models.Entry(
@@ -49,20 +54,33 @@ async def upload_file(
             entry_type=file_type,
             file_path=file_path,
             original_filename=original_filename,
-            file_size=file.size,
+            file_size=file_size,
             processed=False
         )
         
         db.add(entry)
-        db.commit()
-        db.refresh(entry)
+        try:
+            db.commit()
+            db.refresh(entry)
+        except Exception as db_exc:
+            # Rollback and cleanup file if DB commit fails
+            db.rollback()
+            if file_saved and os.path.exists(file_path):
+                file_service.delete_file(file_path)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to save entry to database: {str(db_exc)}"
+            )
         
         # Start background processing task
         process_file_task.delay(entry.id)
         
-        return schemas.Entry.from_orm(entry)
+        return schemas.Entry.model_validate(entry)
         
     except Exception as e:
+        # Cleanup file if it was saved
+        if 'file_path' in locals() and os.path.exists(file_path):
+            file_service.delete_file(file_path)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to upload file: {str(e)}"
@@ -80,7 +98,7 @@ async def get_user_entries(
         models.Entry.user_id == current_user.id
     ).offset(skip).limit(limit).all()
     
-    return [schemas.Entry.from_orm(entry) for entry in entries]
+    return [schemas.Entry.model_validate(entry) for entry in entries]
 
 @router.get("/{entry_id}", response_model=schemas.Entry)
 async def get_entry(
@@ -100,7 +118,7 @@ async def get_entry(
             detail="Entry not found"
         )
     
-    return schemas.Entry.from_orm(entry)
+    return schemas.Entry.model_validate(entry)
 
 @router.delete("/{entry_id}")
 async def delete_entry(

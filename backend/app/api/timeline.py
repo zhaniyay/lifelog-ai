@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from datetime import datetime, timedelta
@@ -32,7 +32,10 @@ async def get_timeline(
             start_date = datetime.fromisoformat(date_from)
             query = query.filter(models.Entry.created_at >= start_date)
         except ValueError:
-            pass
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid date_from format: '{date_from}'. Expected YYYY-MM-DD."
+            )
     
     if date_to:
         try:
@@ -41,7 +44,10 @@ async def get_timeline(
             end_date = end_date + timedelta(days=1)
             query = query.filter(models.Entry.created_at < end_date)
         except ValueError:
-            pass
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid date_to format: '{date_to}'. Expected YYYY-MM-DD."
+            )
     
     # Entry type filtering
     if entry_type:
@@ -50,41 +56,55 @@ async def get_timeline(
     # Order by creation date (newest first)
     entries = query.order_by(desc(models.Entry.created_at)).offset(skip).limit(limit).all()
     
-    return [schemas.Entry.from_orm(entry) for entry in entries]
+    return [schemas.Entry.model_validate(entry) for entry in entries]
 
 @router.get("/stats")
 async def get_timeline_stats(
     current_user: models.User = Depends(get_current_user_dependency),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    batch: Optional[int] = Query(None, description="Batch number for stats (optional)"),
+    batch_size: Optional[int] = Query(None, description="Batch size for stats (optional)")
 ):
-    """Get timeline statistics for the user"""
-    
-    # Total entries
-    total_entries = db.query(models.Entry).filter(
+    """Get timeline statistics for the user, optionally in batches for large datasets"""
+    query = db.query(models.Entry).filter(
         models.Entry.user_id == current_user.id
-    ).count()
+    )
+    if batch is not None and batch_size is not None:
+        query = query.offset(batch * batch_size).limit(batch_size)
+    
+    # Total entries (batched if requested)
+    total_entries = query.count()
     
     # Entries by type
     entries_by_type = {}
     for entry_type in ['text', 'audio', 'image']:
-        count = db.query(models.Entry).filter(
+        type_query = db.query(models.Entry).filter(
             models.Entry.user_id == current_user.id,
             models.Entry.entry_type == entry_type
-        ).count()
+        )
+        if batch is not None and batch_size is not None:
+            type_query = type_query.offset(batch * batch_size).limit(batch_size)
+        count = type_query.count()
         entries_by_type[entry_type] = count
     
     # Recent activity (last 7 days)
     week_ago = datetime.utcnow() - timedelta(days=7)
-    recent_entries = db.query(models.Entry).filter(
+    recent_query = db.query(models.Entry).filter(
         models.Entry.user_id == current_user.id,
         models.Entry.created_at >= week_ago
-    ).count()
+    )
+    if batch is not None and batch_size is not None:
+        recent_query = recent_query.offset(batch * batch_size).limit(batch_size)
+    recent_entries = recent_query.count()
     
     # Processing status
-    processed_entries = db.query(models.Entry).filter(
+    processed_query = db.query(models.Entry).filter(
         models.Entry.user_id == current_user.id,
         models.Entry.processed == True
-    ).count()
+    )
+    if batch is not None and batch_size is not None:
+        processed_query = processed_query.offset(batch * batch_size).limit(batch_size)
+    processed_entries = processed_query.count()
     
     pending_entries = total_entries - processed_entries
     
@@ -109,7 +129,7 @@ async def get_weekly_summaries(
         models.WeeklySummary.user_id == current_user.id
     ).order_by(desc(models.WeeklySummary.week_start)).offset(skip).limit(limit).all()
     
-    return [schemas.WeeklySummary.from_orm(summary) for summary in summaries]
+    return [schemas.WeeklySummary.model_validate(summary) for summary in summaries]
 
 
 @router.post("/generate-summary")

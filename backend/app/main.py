@@ -7,12 +7,11 @@ from typing import List, Optional
 
 from app.core.config import settings
 from app.core.database import get_db, engine
-from app.models import models
+#from app.models import models
+# Create database tables (for development only; use Alembic for production migrations)
+#models.Base.metadata.create_all(bind=engine)
 from app.api import auth, uploads, timeline, search
 from app.services.auth_service import verify_token
-
-# Create database tables
-models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="LifeLog AI API",
@@ -47,10 +46,6 @@ app.include_router(search.router, prefix="/search", tags=["search"])
 @app.get("/")
 async def root():
     return {"message": "LifeLog AI API is running"}
-
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
 
 if __name__ == "__main__":
     import uvicorn

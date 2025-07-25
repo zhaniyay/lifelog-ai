@@ -10,14 +10,13 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     google_id: str
 
-class User(UserBase):
+class User(BaseModel):
     id: int
     google_id: str
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class EntryBase(BaseModel):
     title: Optional[str] = None
@@ -37,8 +36,7 @@ class Entry(EntryBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class WeeklySummaryBase(BaseModel):
     summary: str
@@ -50,8 +48,7 @@ class WeeklySummary(WeeklySummaryBase):
     week_end: datetime
     created_at: datetime
     
-    class Config:
-        from_attributes = True
+    model_config = {"from_attributes": True}
 
 class TokenResponse(BaseModel):
     access_token: str

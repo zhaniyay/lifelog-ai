@@ -6,9 +6,12 @@ from pydantic import BaseModel
 from app.core.database import get_db
 from app.models import models, schemas
 from app.services.auth_service import AuthService, verify_token
+from passlib.context import CryptContext
 
 router = APIRouter()
 security = HTTPBearer()
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class GoogleTokenRequest(BaseModel):
     token: str
@@ -37,7 +40,7 @@ async def google_auth(
         
         return schemas.TokenResponse(
             access_token=access_token,
-            user=schemas.User.from_orm(user)
+            user=schemas.User.model_validate(user)
         )
         
     except Exception as e:
@@ -59,11 +62,19 @@ async def demo_auth(
         demo_user = models.User(
             email=request.email,
             name=request.email.split('@')[0].title(),
-            google_id=f"demo_{request.email}"
+            google_id=f"demo_{request.email}",
+            password_hash=pwd_context.hash(request.password)
         )
         db.add(demo_user)
         db.commit()
         db.refresh(demo_user)
+    else:
+        # Check password
+        if not demo_user.password_hash or not pwd_context.verify(request.password, demo_user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password"
+            )
     
     # Create JWT token
     access_token = AuthService.create_access_token(
@@ -72,7 +83,7 @@ async def demo_auth(
     
     return schemas.TokenResponse(
         access_token=access_token,
-        user=schemas.User.from_orm(demo_user)
+        user=schemas.User.model_validate(demo_user)
     )
 
 @router.get("/me", response_model=schemas.User)
@@ -93,7 +104,7 @@ async def get_current_user(
             detail="User not found"
         )
     
-    return schemas.User.from_orm(user)
+    return schemas.User.model_validate(user)
 
 async def get_current_user_dependency(
     credentials: HTTPAuthorizationCredentials = Depends(security),

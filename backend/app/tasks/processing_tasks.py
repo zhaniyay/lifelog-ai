@@ -5,54 +5,64 @@ from app.core.database import SessionLocal
 from app.models import models
 from app.services.file_service import FileService
 import logging
+import os
+import time
 
 logger = logging.getLogger(__name__)
 
-@celery_app.task(bind=True)
+@celery_app.task(bind=True, max_retries=3, default_retry_delay=5)
 def process_file_task(self, entry_id: int):
-    """Background task to process uploaded files"""
+    """Background task to process uploaded files with retry and file existence check"""
     db = SessionLocal()
     file_service = FileService()
-    
     try:
         # Get entry from database
         entry = db.query(models.Entry).filter(models.Entry.id == entry_id).first()
         if not entry:
             raise Exception(f"Entry {entry_id} not found")
-        
+        # Check if file exists
+        if not entry.file_path or not os.path.exists(entry.file_path):
+            logger.error(f"File for entry {entry_id} does not exist: {entry.file_path}")
+            raise FileNotFoundError(f"File for entry {entry_id} does not exist: {entry.file_path}")
         # Update task progress
         current_task.update_state(state='PROGRESS', meta={'progress': 25})
-        
         # Process file based on type
         content = ""
-        if entry.entry_type == 'text':
-            content = file_service.process_text_file(entry.file_path)
-        elif entry.entry_type == 'audio':
-            content = file_service.process_audio_file(entry.file_path)
-        elif entry.entry_type == 'image':
-            content = file_service.process_image_file(entry.file_path)
-        
+        try:
+            if entry.entry_type == 'text':
+                content = file_service.process_text_file(entry.file_path)
+            elif entry.entry_type == 'audio':
+                content = file_service.process_audio_file(entry.file_path)
+            elif entry.entry_type == 'image':
+                content = file_service.process_image_file(entry.file_path)
+        except Exception as e:
+            logger.error(f"Processing failed for entry {entry_id}: {str(e)}. Retrying...")
+            raise self.retry(exc=e)
         current_task.update_state(state='PROGRESS', meta={'progress': 75})
-        
         # Update entry with extracted content
         entry.content = content
         entry.processed = True
         db.commit()
-        
         current_task.update_state(state='SUCCESS', meta={'progress': 100})
-        
         logger.info(f"Successfully processed file for entry {entry_id}")
         return {"status": "success", "entry_id": entry_id}
-        
-    except Exception as e:
-        logger.error(f"Error processing file for entry {entry_id}: {str(e)}")
-        
-        # Mark entry as failed
+    except FileNotFoundError as fnf:
+        logger.error(str(fnf))
         entry = db.query(models.Entry).filter(models.Entry.id == entry_id).first()
         if entry:
             entry.processed = False
             db.commit()
-        
+        current_task.update_state(
+            state='FAILURE',
+            meta={'error': str(fnf)}
+        )
+        raise fnf
+    except Exception as e:
+        logger.error(f"Error processing file for entry {entry_id}: {str(e)}")
+        entry = db.query(models.Entry).filter(models.Entry.id == entry_id).first()
+        if entry:
+            entry.processed = False
+            db.commit()
         current_task.update_state(
             state='FAILURE',
             meta={'error': str(e)}
